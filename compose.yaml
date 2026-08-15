@@ -1,0 +1,23 @@
+services:
+  manager:
+    image: ghcr.io/OWNER/REPOSITORY:latest
+    container_name: manager-server
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      TZ: Etc/UTC
+    restart: unless-stopped
+    stop_grace_period: 30s
+    init: true
+    shm_size: "256mb"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

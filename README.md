@@ -1,4 +1,4 @@
-# Unofficial Manager Server container
+# Unofficial Manager.io Server container for easy setup of latest free manager.io Accounting Software
 
 An unofficial community container for [Manager Server](https://www.manager.io/server-edition), built from the official Linux release and packaged with headless Chromium so Manager's PDF and email-attachment features work out of the box.
 

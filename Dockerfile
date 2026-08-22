@@ -4,7 +4,7 @@ ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright/dotnet:v1.62.0-noble
 
 FROM alpine:3.22 AS manager-download
 
-ARG MANAGER_VERSION=26.8.14
+ARG MANAGER_VERSION=26.8.21.1
 ARG TARGETARCH
 
 RUN apk add --no-cache ca-certificates curl tar \
@@ -18,20 +18,20 @@ RUN apk add --no-cache ca-certificates curl tar \
        esac \
     && mkdir -p /opt/manager /licenses/manager-server \
     && curl --fail --location --retry 3 --retry-all-errors \
-         "https://github.com/managerhq/ManagerServer/releases/download/${MANAGER_VERSION}/ManagerServer-linux-${manager_arch}.tar.gz" \
+         "https://github.com/managerhq/Manager/releases/download/${MANAGER_VERSION}/ManagerServer-linux-${manager_arch}.tar.gz" \
          --output /tmp/manager-server.tar.gz \
     && tar -xzf /tmp/manager-server.tar.gz -C /opt/manager \
     && test -x /opt/manager/ManagerServer \
     && curl --fail --location --retry 3 --retry-all-errors \
-         "https://raw.githubusercontent.com/managerhq/ManagerServer/${MANAGER_VERSION}/LICENSE.md" \
+         "https://raw.githubusercontent.com/managerhq/ManagerServer/main/LICENSE.md" \
          --output /licenses/manager-server/LICENSE.md \
     && curl --fail --location --retry 3 --retry-all-errors \
-         "https://raw.githubusercontent.com/managerhq/ManagerServer/${MANAGER_VERSION}/THIRD-PARTY-NOTICES.md" \
+         "https://raw.githubusercontent.com/managerhq/ManagerServer/main/THIRD-PARTY-NOTICES.md" \
          --output /licenses/manager-server/THIRD-PARTY-NOTICES.md
 
 FROM ${PLAYWRIGHT_IMAGE}
 
-ARG MANAGER_VERSION=26.8.14
+ARG MANAGER_VERSION=26.8.21.1
 ARG SOURCE_URL=""
 ARG VCS_REF=""
 ARG CREATED=""
@@ -43,7 +43,7 @@ LABEL org.opencontainers.image.title="Unofficial Manager Server container" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.created="${CREATED}" \
       org.opencontainers.image.licenses="LicenseRef-FSL-1.1-Apache-2.0" \
-      io.manager-server.upstream="https://github.com/managerhq/ManagerServer"
+      io.manager-server.upstream="https://github.com/managerhq/Manager"
 
 USER root
 
@@ -79,4 +79,3 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
 
 ENTRYPOINT ["/usr/local/bin/manager-entrypoint"]
-

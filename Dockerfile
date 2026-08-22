@@ -2,7 +2,7 @@
 
 ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright/dotnet:v1.62.0-noble
 
-FROM alpine:3.22 AS manager-download
+FROM alpine:3.24 AS manager-download
 
 ARG MANAGER_VERSION
 ARG TARGETARCH

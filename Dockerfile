@@ -16,18 +16,12 @@ RUN apk add --no-cache ca-certificates curl tar \
     && case "${MANAGER_VERSION}" in \
          ""|*[!0-9.]*) echo "Invalid Manager version: ${MANAGER_VERSION}" >&2; exit 1 ;; \
        esac \
-    && mkdir -p /opt/manager /licenses/manager-server \
+    && mkdir -p /opt/manager \
     && curl --fail --location --retry 3 --retry-all-errors \
          "https://github.com/managerhq/Manager/releases/download/${MANAGER_VERSION}/ManagerServer-linux-${manager_arch}.tar.gz" \
          --output /tmp/manager-server.tar.gz \
     && tar -xzf /tmp/manager-server.tar.gz -C /opt/manager \
     && test -x /opt/manager/ManagerServer \
-    && curl --fail --location --retry 3 --retry-all-errors \
-         "https://raw.githubusercontent.com/managerhq/ManagerServer/main/LICENSE.md" \
-         --output /licenses/manager-server/LICENSE.md \
-    && curl --fail --location --retry 3 --retry-all-errors \
-         "https://raw.githubusercontent.com/managerhq/ManagerServer/main/THIRD-PARTY-NOTICES.md" \
-         --output /licenses/manager-server/THIRD-PARTY-NOTICES.md
 
 FROM ${PLAYWRIGHT_IMAGE}
 
@@ -48,7 +42,6 @@ LABEL org.opencontainers.image.title="Unofficial Manager Server container" \
 USER root
 
 COPY --from=manager-download /opt/manager /opt/manager
-COPY --from=manager-download /licenses /licenses
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/manager-entrypoint
 
 RUN browser_path="$(find /ms-playwright -type f \

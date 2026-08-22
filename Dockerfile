@@ -4,7 +4,7 @@ ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright/dotnet:v1.62.0-noble
 
 FROM alpine:3.22 AS manager-download
 
-ARG MANAGER_VERSION=26.8.21.1
+ARG MANAGER_VERSION
 ARG TARGETARCH
 
 RUN apk add --no-cache ca-certificates curl tar \
@@ -25,7 +25,7 @@ RUN apk add --no-cache ca-certificates curl tar \
 
 FROM ${PLAYWRIGHT_IMAGE}
 
-ARG MANAGER_VERSION=26.8.21.1
+ARG MANAGER_VERSION
 ARG SOURCE_URL=""
 ARG VCS_REF=""
 ARG CREATED=""
@@ -42,6 +42,7 @@ LABEL org.opencontainers.image.title="Unofficial Manager Server container" \
 USER root
 
 COPY --from=manager-download /opt/manager /opt/manager
+COPY licenses/manager-server/ /licenses/manager-server/
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/manager-entrypoint
 
 RUN browser_path="$(find /ms-playwright -type f \

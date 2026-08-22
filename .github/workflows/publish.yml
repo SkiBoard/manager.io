@@ -11,10 +11,6 @@ on:
   schedule:
     - cron: "17 3 * * *"
 
-permissions:
-  contents: read
-  packages: write
-
 concurrency:
   group: publish-manager-server
   cancel-in-progress: false
@@ -22,6 +18,15 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image: ${{ steps.release.outputs.image }}
+      version: ${{ steps.release.outputs.version }}
+      create_release: ${{ steps.decision.outputs.create_release }}
 
     steps:
       - name: Check out repository
@@ -81,8 +86,20 @@ jobs:
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Decide whether to publish
+        id: decision
+        env:
+          ALREADY_PUBLISHED: ${{ steps.existing.outputs.published }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$ALREADY_PUBLISHED" != "true" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "create_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "create_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Generate image metadata
-        if: steps.existing.outputs.published != 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.decision.outputs.create_release == 'true'
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -97,7 +114,7 @@ jobs:
             org.opencontainers.image.licenses=LicenseRef-FSL-1.1-Apache-2.0
 
       - name: Build and publish
-        if: steps.existing.outputs.published != 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.decision.outputs.create_release == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -116,5 +133,39 @@ jobs:
           sbom: true
 
       - name: No new Manager release
-        if: steps.existing.outputs.published == 'true' && github.event_name != 'workflow_dispatch'
-        run: echo "Manager Server ${{ steps.release.outputs.version }} is already published."
+        if: steps.decision.outputs.create_release != 'true'
+        run: |
+          echo "Manager Server ${{ steps.release.outputs.version }} is already published."
+
+  create-release:
+    name: Create GitHub release
+    needs: publish
+    if: needs.publish.outputs.create_release == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub release $VERSION already exists."
+            exit 0
+          fi
+
+          notes="$(printf 'Docker image: %s:%s\n\nLatest image: %s:latest\n\nUpstream release: https://github.com/managerhq/Manager/releases/tag/%s\n' \
+            "$IMAGE" "$VERSION" "$IMAGE" "$VERSION")"
+
+          gh release create "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Manager Server $VERSION" \
+            --notes "$notes"

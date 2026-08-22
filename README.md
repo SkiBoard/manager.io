@@ -1,51 +1,103 @@
-# Unofficial Manager.io Server container for easy setup of latest free manager.io Accounting Software to run in a container
+# Manager.io Server Edition Docker Container
 
-An unofficial community container for [Manager Server](https://www.manager.io/server-edition), built from the official Linux release and packaged with headless Chromium so Manager's PDF and email-attachment features work out of the box.
+An unofficial Docker image for running [Manager.io Server Edition](https://www.manager.io/server-edition) in a container.
 
-This project is not affiliated with, sponsored by, or endorsed by NGSoftware Pty Ltd or Manager. Manager names and trademarks belong to their respective owner.
+The image includes Chromium, enabling Manager’s PDF generation and emailed invoice attachment features without additional configuration.
 
-## Why this image exists
+> This project is not affiliated with, sponsored by, or endorsed by NGSoftware Pty Ltd or Manager.io. Manager names and trademarks belong to their respective owners.
 
-Manager publishes official Linux binaries but does not currently publish an official container image. A minimal runtime container can run the accounting server, but Manager's internal PDF generator also needs a compatible headless browser and its system libraries. This image combines:
+## What you need
 
-- the version-pinned official Manager Server Linux binary;
-- Microsoft's official Playwright runtime with Chromium;
-- a non-root runtime user (`10001:10001`);
-- `amd64` and `arm64` images; and
-- Manager's upstream licence and third-party notices inside `/licenses/manager-server`.
+- A computer, server, or NAS with Docker installed.
+- Docker Compose or a container management application such as Synology Container Manager.
+- A folder for storing your Manager.io data.
+- An available network port, such as `8080`.
 
-No third-party Manager binary is used.
+## Step 1: Choose an image version
 
-## Quick start
+The image is published to GitHub Container Registry:
 
-Replace `OWNER/REPOSITORY` with the GitHub owner and repository name where the image is published. Then create the data directory and make it writable by the container user:
-
-```bash
-mkdir -p ./data
-sudo chown -R 10001:10001 ./data
+```text
+ghcr.io/skiboard/manager.io
 ```
 
-Use this Compose configuration for host-local access through a reverse proxy or Tailscale Serve:
+You can use either a specific version:
+
+```yaml
+image: ghcr.io/skiboard/manager.io:26.8.21.1
+```
+
+Or the latest published version:
+
+```yaml
+image: ghcr.io/skiboard/manager.io:latest
+```
+
+Using a specific version is recommended if you want to review and control updates. Replace `26.8.21.1` with your preferred published version.
+
+Available versions are listed under:
+
+- [Releases](https://github.com/SkiBoard/manager.io/releases)
+- [Container packages](https://github.com/SkiBoard/manager.io/pkgs/container/manager.io)
+
+## Step 2: Create a data folder
+
+Manager.io stores its application data in `/data` inside the container.
+
+Map this location to a folder on your computer or NAS so your data survives container restarts, replacements, and updates.
+
+For example:
+
+```text
+/volume1/docker/manager-io/data
+```
+
+On a Linux server, you might instead use:
+
+```text
+/opt/manager-io/data
+```
+
+Or create a `data` folder alongside your Compose file:
+
+```text
+./data
+```
+
+> Important: Do not delete this folder when updating or recreating the container. It contains your Manager.io application data.
+
+## Step 3: Create your Docker Compose configuration
+
+Create a file named `compose.yaml` containing:
 
 ```yaml
 services:
   manager:
-    image: ghcr.io/OWNER/REPOSITORY:latest
-    container_name: manager-server
+    image: ghcr.io/skiboard/manager.io:26.8.21.1
+
+    container_name: manager-io
+
+    restart: unless-stopped
+
+    init: true
+
+    shm_size: 256mb
+
+    environment:
+      TZ: Australia/Melbourne
+
     ports:
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
+
     volumes:
       - ./data:/data
-    environment:
-      TZ: Etc/UTC
-    restart: unless-stopped
-    stop_grace_period: 30s
-    init: true
-    shm_size: "256mb"
+
     security_opt:
       - no-new-privileges:true
+
     cap_drop:
       - ALL
+
     logging:
       driver: json-file
       options:
@@ -53,106 +105,352 @@ services:
         max-file: "3"
 ```
 
-Start it:
+Adjust the configuration if needed:
 
-```bash
-docker compose up -d
+- Replace `26.8.21.1` with the version you want to run.
+- Change `Australia/Melbourne` to your local time zone.
+- Change the first `8080` if another application already uses that port.
+- Replace `./data` with an absolute folder path if preferred.
+
+For example, on a Synology NAS:
+
+```yaml
+volumes:
+  - /volume1/docker/manager-io/data:/data
 ```
 
-Manager listens on port `8080` inside the container and stores all application data in `/data`.
+If port `8080` is already in use:
 
-### LAN access
+```yaml
+ports:
+  - "8081:8080"
+```
 
-The example deliberately binds to `127.0.0.1`, so other devices cannot connect directly. To allow access from the local network, change the port mapping to:
+The application would then be available on port `8081`.
+
+### Restricting access to the local machine
+
+The standard configuration:
 
 ```yaml
 ports:
   - "8080:8080"
 ```
 
-Then open `http://SERVER-IP:8080`.
+makes Manager available through the host’s network interfaces.
 
-Do not forward port 8080 directly from an internet router. Use an authenticated HTTPS reverse proxy, Tailscale Serve, Cloudflare Access, or an equivalent secure access layer.
-
-## HTTPS is required for PDF and Email buttons
-
-Current Manager Server versions use the browser Web Crypto API while preparing PDFs. Browsers only expose that API in a secure context. Manager itself can be used at an HTTP LAN address, but its **PDF** and **Email** buttons may appear to do nothing.
-
-Use an HTTPS address, such as a Tailscale Serve hostname or an HTTPS reverse proxy. For example:
-
-```bash
-sudo tailscale serve --bg http://127.0.0.1:8080
-```
-
-## Versioning and updates
-
-The publishing workflow checks Manager's official GitHub releases daily. When a new release appears, it builds and publishes:
-
-- `ghcr.io/OWNER/REPOSITORY:VERSION`
-- `ghcr.io/OWNER/REPOSITORY:latest`
-
-The moving `latest` tag does **not** update an already-running container. To update deliberately:
-
-```bash
-docker compose pull manager
-docker compose up -d manager
-```
-
-Back up `/data` before updating. Accounting-data formats can be migrated by newer application versions, so fully unattended container updates are not recommended.
-
-For a controlled production deployment, pin a version:
+If you only access Manager through a reverse proxy, Tailscale Serve, or another service running on the same host, you can restrict the published port to localhost:
 
 ```yaml
-image: ghcr.io/OWNER/REPOSITORY:26.8.14
+ports:
+  - "127.0.0.1:8080:8080"
 ```
 
-Then change the tag only after confirming that the backup succeeded and reviewing the upstream release.
+With this configuration, other devices cannot connect directly to the host’s port `8080`.
 
-## Backups
+## Step 4: Start the container
 
-Back up the entire mounted `/data` directory. It contains Manager users, settings, authentication configuration, attachments, and business files. Individual businesses can also be backed up from within Manager.
-
-Do not rely on the container layer as a backup. Containers are disposable; `/data` is the persistent state.
-
-## GitHub Container Registry setup
-
-1. Create a public GitHub repository, for example `manager-server-container`.
-2. Add these files and push the default branch.
-3. Open **Actions → Publish container → Run workflow**.
-4. Leave the Manager version blank to build the latest official release.
-5. After the first publication, open the package settings and make the package public.
-
-The workflow uses the repository's standard `GITHUB_TOKEN`; no personal access token is required.
-
-## Build locally
+From the directory containing `compose.yaml`, run:
 
 ```bash
-docker buildx build \
-  --build-arg MANAGER_VERSION=26.8.14 \
-  --platform linux/amd64 \
-  --tag manager-server:26.8.14 \
-  --load .
+docker compose up -d
 ```
 
-## Verification
+Docker will download the image and start Manager.io in the background.
 
-Confirm the server and bundled browser:
+Check that the container is running:
 
 ```bash
-docker logs manager-server
-docker exec manager-server chromium --version
+docker compose ps
 ```
 
-Then verify that Manager can create a PDF through an HTTPS connection before relying on emailed invoices.
+View the startup logs:
 
-## Licences
+```bash
+docker compose logs manager
+```
 
-The container packaging in this repository is available under the MIT License.
+To follow the logs continuously:
 
-Manager Server is redistributed under the [Functional Source License 1.1 with an Apache 2.0 Future License](https://github.com/managerhq/ManagerServer/blob/main/LICENSE.md). Its licence permits redistribution for permitted, non-competing purposes provided the licence or a link is included and copyright notices are preserved. The exact upstream licence and third-party notices for the packaged version are included in the image under `/licenses/manager-server`.
+```bash
+docker compose logs -f manager
+```
 
-Microsoft Playwright, Chromium, the base operating system and their components retain their own licences. Users are responsible for complying with Manager Server's licence and any product licensing requirements applying to their use.
+## Step 5: Open Manager.io
 
-## Support
+If Docker is running on the same computer you are using:
 
-For Manager accounting questions, releases and product issues, use the [official Manager resources](https://www.manager.io/guides). For issues specific to this container packaging, open an issue in this repository.
+```text
+http://localhost:8080
+```
+
+If Docker is running on another computer or NAS:
+
+```text
+http://YOUR-SERVER-IP:8080
+```
+
+For example:
+
+```text
+http://192.168.1.10:8080
+```
+
+Replace the address and port with the values relevant to your setup.
+
+If you bound the port to `127.0.0.1`, access Manager through your configured reverse proxy, Tailscale Serve, or another local access method.
+
+## Installing on a Synology NAS
+
+You can deploy the same container through Synology Container Manager.
+
+1. Open **File Station**.
+
+2. Create a folder for the project, for example:
+
+   ```text
+   /volume1/docker/manager-io
+   ```
+
+3. Inside that folder, create a `data` folder:
+
+   ```text
+   /volume1/docker/manager-io/data
+   ```
+
+4. Open **Container Manager**.
+
+5. Select **Project**.
+
+6. Click **Create**.
+
+7. Enter a project name, such as:
+
+   ```text
+   manager-io
+   ```
+
+8. Select the project folder:
+
+   ```text
+   /volume1/docker/manager-io
+   ```
+
+9. Choose the option to create or enter a Compose configuration.
+
+10. Paste:
+
+    ```yaml
+    services:
+      manager:
+        image: ghcr.io/skiboard/manager.io:26.8.21.1
+
+        container_name: manager-io
+
+        restart: unless-stopped
+
+        init: true
+
+        shm_size: 256mb
+
+        environment:
+          TZ: Australia/Melbourne
+
+        ports:
+          - "8080:8080"
+
+        volumes:
+          - /volume1/docker/manager-io/data:/data
+
+        security_opt:
+          - no-new-privileges:true
+
+        cap_drop:
+          - ALL
+
+        logging:
+          driver: json-file
+          options:
+            max-size: "10m"
+            max-file: "3"
+    ```
+
+11. Save and start the project.
+
+12. Open Manager in your browser:
+
+    ```text
+    http://YOUR-NAS-IP:8080
+    ```
+
+If you use Tailscale Serve or another reverse proxy on the NAS, consider replacing:
+
+```yaml
+ports:
+  - "8080:8080"
+```
+
+with:
+
+```yaml
+ports:
+  - "127.0.0.1:8080:8080"
+```
+
+## Updating Manager.io
+
+### Recommended: update a pinned version manually
+
+Using a version-specific image gives you control over when updates are installed:
+
+```yaml
+image: ghcr.io/skiboard/manager.io:26.8.21.1
+```
+
+When a newer version becomes available:
+
+1. Check the [GitHub Releases page](https://github.com/SkiBoard/manager.io/releases).
+
+2. Back up your Manager.io data.
+
+3. Update the version in `compose.yaml`:
+
+   ```yaml
+   image: ghcr.io/skiboard/manager.io:NEW-VERSION
+   ```
+
+4. Download and start the updated image:
+
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
+
+On Synology, edit the project’s Compose configuration and redeploy or restart the project using the updated image version.
+
+Your data remains in the mapped `/data` folder.
+
+> Before upgrading, make sure you have a usable backup. Application updates can change stored data formats, which may make downgrading difficult.
+
+### Alternative: use the latest image
+
+To track the latest published image:
+
+```yaml
+image: ghcr.io/skiboard/manager.io:latest
+```
+
+To update manually:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+If you run an image-update service such as Watchtower, it may automatically update containers using the `latest` tag.
+
+Use a specific version tag if you want to decide when upgrades occur.
+
+## Getting notified about new releases
+
+To receive GitHub notifications when a new image is published:
+
+1. Open the [repository](https://github.com/SkiBoard/manager.io).
+2. Click **Watch**.
+3. Select **Custom**.
+4. Enable **Releases**.
+5. Ensure email notifications are enabled in your GitHub account settings.
+
+The repository checks for new official Manager.io releases daily.
+
+When a new version is found and the container image is successfully built, a corresponding GitHub release is created.
+
+No release is created when the version has not changed.
+
+## Troubleshooting
+
+### The container does not start
+
+Check the logs:
+
+```bash
+docker compose logs manager
+```
+
+Common causes include:
+
+- Port `8080` is already in use.
+- The mapped data folder does not exist.
+- The container cannot write to the mapped data folder.
+- The specified image version does not exist.
+
+### Port 8080 is already in use
+
+Change the host port:
+
+```yaml
+ports:
+  - "8081:8080"
+```
+
+Then open:
+
+```text
+http://YOUR-SERVER-IP:8081
+```
+
+### The container cannot write to the data folder
+
+The image runs as a non-root user with user and group ID `10001`.
+
+On Linux, you can grant ownership of the data folder to that user:
+
+```bash
+sudo chown -R 10001:10001 /path/to/manager-io/data
+```
+
+For a Synology installation:
+
+```bash
+sudo chown -R 10001:10001 /volume1/docker/manager-io/data
+```
+
+Only run this command against the specific Manager.io data directory.
+
+### PDF generation or emailed invoice attachments
+
+Chromium is already included in the image. Manager’s PDF and email-attachment features should work without installing a separate browser.
+
+### Check the running version
+
+The current Manager version appears inside the Manager.io application.
+
+You can also check the configured image:
+
+```bash
+docker inspect manager-io --format '{{.Config.Image}}'
+```
+
+Example output:
+
+```text
+ghcr.io/skiboard/manager.io:26.8.21.1
+```
+
+## Security notes
+
+- Avoid exposing Manager.io directly to the public internet without appropriate security controls.
+- Prefer a VPN such as Tailscale or a properly configured HTTPS reverse proxy for remote access.
+- Use Manager.io authentication and configure multi-factor authentication where available.
+- Keep backups of the mapped data folder.
+- Review updates before installing them in production environments.
+
+## Licence
+
+The files in this repository are provided under the repository’s MIT licence.
+
+Manager.io Server Edition remains subject to its own licensing terms. Relevant upstream licence and third-party notice files are included under:
+
+```text
+licenses/manager-server/
+```

@@ -21,7 +21,7 @@ RUN apk add --no-cache ca-certificates curl tar \
          "https://github.com/managerhq/Manager/releases/download/${MANAGER_VERSION}/ManagerServer-linux-${manager_arch}.tar.gz" \
          --output /tmp/manager-server.tar.gz \
     && tar -xzf /tmp/manager-server.tar.gz -C /opt/manager \
-    && test -x /opt/manager/ManagerServer \
+    && test -x /opt/manager/ManagerServer
 
 FROM ${PLAYWRIGHT_IMAGE}
 
@@ -64,6 +64,7 @@ ENV HOME=/home/manager \
 WORKDIR /opt/manager
 
 VOLUME ["/data"]
+
 EXPOSE 8080
 
 USER 10001:10001
